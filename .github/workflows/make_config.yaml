@@ -3,10 +3,10 @@ name: OpenWrt Config Only (No Build)
 on:
   workflow_dispatch:        # 手动触发
     inputs:
-      enable_ssh:
-        description: 'Enable SSH ? 0-Disable; 1-Normal_Enable; 2-Only_Enable'
-        type: string
-        default: '0'
+      disable_git_clone:
+        description: 'Disable git clone and manual download'
+        type: boolean
+        default: false
       router_name:
         description: 'choose the config file of device'
         type: choice
@@ -37,7 +37,7 @@ jobs:
 
       # 克隆 OpenWrt 源码
       - name: Clone OpenWrt source
-        if: ${{ inputs.enable_ssh != '2' }}
+        if: ${{ inputs.disable_git_clone == false }}
         run: |
           if [ "${{ inputs.router_name }}" == "ZN-M2" ]; then
              git clone https://github.com/LiBwrt/Libwrt openwrt
@@ -60,12 +60,10 @@ jobs:
       # SSH 连接，您将在此手动执行 make menuconfig
       - name: SSH session for menuconfig
         uses: mxschmitt/action-tmate@v3
-        if: ${{ inputs.enable_ssh != '0'}}
         timeout-minutes: 300
 
       # 导出最终的 .config 文件
       - name: Collect config file
-        if: ${{ inputs.enable_ssh != '2' }}
         run: |
           cd openwrt
           # 如果 .config 存在，则复制到工作区
@@ -82,14 +80,12 @@ jobs:
           
       - name: Create Git Tag
         id: tag
-        if: ${{ inputs.enable_ssh != '2' }}
         run: |
           TAG_NAME="config-${{ inputs.router_name }}-$(date +%Y%m%d-%H%M%S)"
           echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
 
       - name: 提交并推送到仓库
         uses: stefanzweifel/git-auto-commit-action@v5
-        if: ${{ inputs.enable_ssh != '2' }}
         with:
           commit_message: "自动化：复制并更新配置文件"
           file_pattern: ${{ env.LATEST_FILE }} # 仅指定需要提交的文件
@@ -98,7 +94,6 @@ jobs:
       # 创建 Release 并上传 .config 文件
       - name: Create Release and upload config
         uses: softprops/action-gh-release@v1
-        if: ${{ inputs.enable_ssh != '2' }}
         with:
           tag_name: ${{ steps.tag.outputs.tag_name }}
           name: "OpenWrt Config ${{ steps.tag.outputs.tag_name }}"
