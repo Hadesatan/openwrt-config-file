@@ -7,6 +7,15 @@ on:
         description: 'Enable SSH ? 0-Disable; 1-Normal_Enable; 2-Only_Enable'
         type: string
         default: '0'
+      router_name:
+        description: 'choose the config file of device'
+        type: choice
+        default: 'ZN-M2'
+        options:
+          - ZN-M2
+          - Newifi-D2
+          - HC5962
+    
 
 jobs:
   config:
@@ -30,9 +39,14 @@ jobs:
       - name: Clone OpenWrt source
         if: ${{ inputs.enable_ssh != '2' }}
         run: |
+          if [ "${{ inputs.router_name }}" == "ZN-M2" ]; then
+             git clone https://github.com/LiBwrt/Libwrt openwrt
+          else
+             git clone -b openwrt-24.10 https://github.com/immortalwrt/immortalwrt openwrt
+          fi
           git clone https://github.com/LiBwrt/Libwrt openwrt
           cd openwrt
-          sed -i '$a src-git kiddin9 https://github.com/kiddin9/op-packages.git;main' feeds.conf.default
+          sed -i '$a src-git luci-app-easymesh https://github.com/thosoft-git/luci-app-easymesh' feeds.conf.default
           ./scripts/feeds update -a
           ./scripts/feeds install -a
           cd ../config
@@ -57,10 +71,10 @@ jobs:
           # 如果 .config 存在，则复制到工作区
           if [ -f .config ]; then
             ./scripts/diffconfig.sh > config.seed
-            cp config.seed ../config_$(date +%Y%m%d_%H%M%S).txt
-            cp config.seed ../config/config_$(date +%Y%m%d_%H%M%S).txt
-            LATEST_FILE="config/config_$(date +%Y%m%d_%H%M%S).txt"
-            echo "LATEST_FILE="config/config_$(date +%Y%m%d_%H%M%S).txt"" >> $GITHUB_ENV
+            cp config.seed ../config_${{ inputs.router_name }}_$(date +%Y%m%d_%H%M%S).txt
+            cp config.seed ../config/config_${{ inputs.router_name }}_$(date +%Y%m%d_%H%M%S).txt
+            LATEST_FILE="config/config_${{ inputs.router_name }}_$(date +%Y%m%d_%H%M%S).txt"
+            echo "LATEST_FILE="config/config_${{ inputs.router_name }}_$(date +%Y%m%d_%H%M%S).txt"" >> $GITHUB_ENV
           else
             echo "No .config found, exiting"
             exit 1
@@ -70,7 +84,7 @@ jobs:
         id: tag
         if: ${{ inputs.enable_ssh != '2' }}
         run: |
-          TAG_NAME="config-$(date +%Y%m%d-%H%M%S)"
+          TAG_NAME="config-${{ inputs.router_name }}-$(date +%Y%m%d-%H%M%S)"
           echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
 
       - name: 提交并推送到仓库
